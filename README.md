@@ -48,11 +48,18 @@ All keys are free. If a key is missing, the run doesn't break: that source is si
 ## Quick start
 
 ```bash
-git clone https://github.com/AlbedoGown/ioc-triage.git
-cd ioc-triage
-pip install -e .
+pip install ioc-triage
+```
 
-cp .env.example .env          # put your keys here
+Then put your keys into a `.env` (variable names are in the table above) and check your first indicator:
+
+```bash
+cat > .env <<'KEYS'
+VT_API_KEY=
+ABUSEIPDB_API_KEY=
+OPENTIP_API_KEY=
+ABUSECH_AUTH_KEY=
+KEYS
 
 echo "8.8.8.8" | ioc-triage
 ```
@@ -138,6 +145,7 @@ A few things to know:
 - Kaspersky doesn't publish its limits, so set your own pacing with `OPENTIP_RATE_LIMIT_PER_MIN`.
 - HTTP 403 can mean either a bad key or a used-up quota.
 - The tool only makes reputation lookups and never uploads files to the cloud.
+- OpenTIP won't take a URL without a path (like `https://example.com/`) as a URL and answers 400. The tool checks such a URL as a domain or IP instead and says so in `context`.
 - URL indicators travel as a query parameter, so they may end up in the service's logs. Keep that in mind for sensitive URLs.
 
 </details>
@@ -183,6 +191,9 @@ Every source is a module with a `check(indicator, indicator_type) -> Verdict` fu
 ## Development
 
 ```bash
+git clone https://github.com/AlbedoGown/ioc-triage.git
+cd ioc-triage
+pip install -e .
 python -m unittest discover -s tests -v
 ```
 

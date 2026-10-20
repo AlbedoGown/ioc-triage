@@ -48,11 +48,18 @@ IP · домены · URL · MD5 / SHA1 / SHA256 → VirusTotal, AbuseIPDB, Kasp
 ## Быстрый старт
 
 ```bash
-git clone https://github.com/AlbedoGown/ioc-triage.git
-cd ioc-triage
-pip install -e .
+pip install ioc-triage
+```
 
-cp .env.example .env          # впиши свои ключи
+Дальше положи ключи в `.env` (имена переменных в таблице выше) и проверь первый индикатор:
+
+```bash
+cat > .env <<'KEYS'
+VT_API_KEY=
+ABUSEIPDB_API_KEY=
+OPENTIP_API_KEY=
+ABUSECH_AUTH_KEY=
+KEYS
 
 echo "8.8.8.8" | ioc-triage
 ```
@@ -138,6 +145,7 @@ ioc-triage --input iocs.txt --env-file ~/secrets/ioc.env --workers 2
 - Лимиты Kaspersky не публикует, так что паузу между запросами задавай сам через `OPENTIP_RATE_LIMIT_PER_MIN`.
 - HTTP 403 может означать и неверный ключ, и закончившуюся квоту.
 - Инструмент делает только репутационные запросы и никогда не загружает файлы в облако.
+- URL без пути (например `https://example.com/`) OpenTIP как URL не принимает и отвечает 400. Такой URL инструмент сам проверяет как домен или IP и пишет об этом в `context`.
 - URL-индикатор уходит в параметре запроса, поэтому может осесть в логах сервиса. Помни об этом, если URL чувствительный.
 
 </details>
@@ -183,6 +191,9 @@ ioc_triage/
 ## Разработка
 
 ```bash
+git clone https://github.com/AlbedoGown/ioc-triage.git
+cd ioc-triage
+pip install -e .
 python -m unittest discover -s tests -v
 ```
 
