@@ -28,7 +28,7 @@ class OpenTipTestCase(unittest.TestCase):
         env = mock.patch.dict(os.environ, {opentip.API_KEY_ENV: "ot-key"})
         env.start()
         self.addCleanup(env.stop)
-        opentip.limiter.last_request_at = None
+        opentip.limiter.next_slot = None
         self.sleep = mock.patch("time.sleep").start()
         self.addCleanup(mock.patch.stopall)
 

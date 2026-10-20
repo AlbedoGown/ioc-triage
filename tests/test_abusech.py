@@ -76,6 +76,13 @@ class MalwareBazaarTests(AbuseChTestCase):
         v = abusech.check(SHA256, "sha256")
         self.assertEqual(v.verdict, "не найден в MalwareBazaar")
         self.assertIsNone(v.detections)
+        self.assertTrue(v.cacheable)
+
+    def test_unknown_status_is_not_cached(self):
+        self._patch_urlopen(_fake_response({"query_status": "server_busy"}))
+        v = abusech.check(SHA256, "sha256")
+        self.assertIn("вернул статус", v.verdict)
+        self.assertFalse(v.cacheable)
 
 
 class UrlhausTests(AbuseChTestCase):
@@ -201,6 +208,7 @@ class ErrorTests(AbuseChTestCase):
         self._patch_urlopen(urllib.error.URLError("Name or service not known"))
         v = abusech.check(SHA256, "sha256")
         self.assertTrue(v.verdict.startswith("ошибка сети"), v.verdict)
+        self.assertFalse(v.cacheable)
 
     def test_timeout_is_not_raised(self):
         self._patch_urlopen(TimeoutError("timed out"))

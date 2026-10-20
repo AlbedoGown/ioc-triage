@@ -1,21 +1,20 @@
 import csv
 import json
 import sys
-from dataclasses import asdict
 
-from ioc_triage.sources import Verdict
+from ioc_triage.sources import PUBLIC_FIELDS, Verdict
 
 
 def render(verdicts: list[Verdict], fmt: str) -> None:
     if fmt == "json":
-        json.dump([asdict(v) for v in verdicts], sys.stdout, ensure_ascii=False, indent=2)
+        json.dump([v.to_dict() for v in verdicts], sys.stdout, ensure_ascii=False, indent=2)
         return
 
     if fmt == "csv":
-        writer = csv.DictWriter(sys.stdout, fieldnames=list(asdict(verdicts[0]).keys()))
+        writer = csv.DictWriter(sys.stdout, fieldnames=list(PUBLIC_FIELDS))
         writer.writeheader()
         for v in verdicts:
-            writer.writerow(asdict(v))
+            writer.writerow(v.to_dict())
         return
 
     _render_table(verdicts)

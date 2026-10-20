@@ -12,8 +12,11 @@ import urllib.parse
 import urllib.request
 
 from ioc_triage.sources import Verdict
+from ioc_triage.sources.ratelimit import RateLimiter
 
 API_KEY_ENV = "ABUSEIPDB_API_KEY"
+RATE_LIMIT_ENV = "ABUSEIPDB_RATE_LIMIT_PER_MIN"
+limiter = RateLimiter("AbuseIPDB", RATE_LIMIT_ENV, 0)
 API_URL = "https://api.abuseipdb.com/api/v2/check"
 MAX_AGE_DAYS = 90
 HTTP_TIMEOUT = 15
@@ -44,6 +47,7 @@ def check(indicator: str, indicator_type: str) -> Verdict:
         return verdict
 
     _fill_verdict(verdict, data.get("data") or {})
+    verdict.cacheable = True
     return verdict
 
 
@@ -86,6 +90,7 @@ def _http_error_text(exc: urllib.error.HTTPError) -> str:
 
 
 def _get(url: str, api_key: str) -> dict:
+    limiter.wait()
     req = urllib.request.Request(
         url,
         headers={"Key": api_key, "Accept": "application/json", "User-Agent": "ioc-triage/0.1"},

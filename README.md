@@ -1,6 +1,6 @@
 <div align="center">
 
-**English** | [Русский](README.ru.md)
+**English** | [Русский](https://github.com/AlbedoGown/ioc-triage/blob/main/README.ru.md)
 
 # ioc-triage
 
@@ -11,7 +11,7 @@ IP · domains · URLs · MD5 / SHA1 / SHA256 → VirusTotal, AbuseIPDB, Kaspersk
 [![tests](https://github.com/AlbedoGown/ioc-triage/actions/workflows/tests.yml/badge.svg)](https://github.com/AlbedoGown/ioc-triage/actions/workflows/tests.yml)
 ![python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
-[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![license](https://img.shields.io/badge/license-MIT-green)](https://github.com/AlbedoGown/ioc-triage/blob/main/LICENSE)
 
 </div>
 
@@ -37,7 +37,8 @@ example.com  domain  abuse.ch/ThreatFox      —                   —          
 - **Automatic type detection**: IP, domain, URL, MD5, SHA1, SHA256 — no need to specify it
 - **Six sources** via official APIs, each in its own module behind a common interface
 - **Private addresses never leave your network**: RFC1918, CGNAT, link-local and loopback are marked as internal without any request
-- **Rate-limit aware**: pacing for the VirusTotal free tier (4 requests/min), clear messages on HTTP 429
+- **Parallel, rate-limit aware**: sources are queried in parallel, each with its own request pacing (VirusTotal free tier: 4 requests/min); clear messages on HTTP 429
+- **Local cache**: results are cached for 24 hours, so re-checking the same indicators does not spend API quota; network errors are never cached
 - **Never crashes on a source**: a missing key, a network error or a rejected key becomes a row in the results, not a traceback
 - **Output for humans and scripts**: table, `--output csv`, `--output json`
 - **Zero dependencies**: Python standard library only
@@ -63,10 +64,11 @@ cd ioc-triage
 pip install -e .
 
 cp .env.example .env          # put your keys here
-set -a; . ./.env; set +a      # keys are read from environment variables
 
 echo "8.8.8.8" | ioc-triage
 ```
+
+`.env` in the current directory is loaded automatically; another file can be passed with `--env-file`. Variables already set in the environment take precedence over the file.
 
 ## Usage
 
@@ -83,7 +85,16 @@ grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' firewall.log | sort -u | ioc-triage
 # structured output
 ioc-triage --input iocs.txt --output json > result.json
 ioc-triage --input iocs.txt --output csv  > result.csv
+
+# cache: custom lifetime or bypass
+ioc-triage --input iocs.txt --cache-ttl 6
+ioc-triage --input iocs.txt --no-cache
+
+# keys from a specific file, fewer parallel requests per source
+ioc-triage --input iocs.txt --env-file ~/secrets/ioc.env --workers 2
 ```
+
+The cache lives in `~/.cache/ioc-triage/cache.json` (readable only by you) and stores real source answers, including "not found"; errors, skipped sources and rate-limit responses are not cached. Per-source pacing is set with `VT_RATE_LIMIT_PER_MIN`, `OPENTIP_RATE_LIMIT_PER_MIN`, `ABUSEIPDB_RATE_LIMIT_PER_MIN` and `ABUSECH_RATE_LIMIT_PER_MIN` (empty means no pause, VT defaults to 4).
 
 <details>
 <summary>JSON format</summary>
@@ -164,7 +175,8 @@ ThreatFox searches by substring, so only exact matches count (`google.com` does 
 ioc_triage/
 ├── cli.py            # arguments, input reading, routing by type
 ├── detect.py         # indicator type detection, private networks
-├── cache.py          # local TTL cache (not wired in yet)
+├── cache.py          # local TTL cache
+├── envfile.py        # .env loader
 ├── output.py         # table / csv / json
 └── sources/
     ├── __init__.py   # Verdict dataclass
@@ -191,9 +203,9 @@ Tests mock HTTP responses and never touch the network, so no keys are needed.
 - [x] abuse.ch: URLhaus, ThreatFox, MalwareBazaar
 - [x] VirusTotal and AbuseIPDB, VT rate-limit pacing
 - [x] `table` / `csv` / `json` output
-- [ ] Wire in the TTL cache so repeated checks do not spend quota
-- [ ] Parallel requests with a separate limit per source
-- [ ] Read `.env` without manual export
+- [x] TTL cache so repeated checks do not spend quota
+- [x] Parallel requests with a separate limit per source
+- [x] Read `.env` without manual export
 - [ ] English output messages
 - [x] Kaspersky OpenTIP as a source
 - [ ] `ioc-triage cve <product> <version>` — CVE lookup via NVD and the FSTEC BDU (Russian vulnerability database)
@@ -205,4 +217,4 @@ An educational and portfolio project. The tool aggregates public reputation data
 
 ## License
 
-[MIT](LICENSE) © 2026 AlbedoGown
+[MIT](https://github.com/AlbedoGown/ioc-triage/blob/main/LICENSE) © 2026 AlbedoGown

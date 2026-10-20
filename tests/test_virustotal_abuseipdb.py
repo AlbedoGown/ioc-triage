@@ -29,7 +29,7 @@ class VirusTotalTestCase(unittest.TestCase):
         env = mock.patch.dict(os.environ, {virustotal.API_KEY_ENV: "vt-key", virustotal.RATE_LIMIT_ENV: "4"})
         env.start()
         self.addCleanup(env.stop)
-        virustotal.limiter.last_request_at = None
+        virustotal.limiter.next_slot = None
         self.sleep = mock.patch("time.sleep").start()
         self.addCleanup(mock.patch.stopall)
 
@@ -118,11 +118,13 @@ class VirusTotalTests(VirusTotalTestCase):
         self._patch_urlopen(_http_error(404))
         v = virustotal.check(EICAR_SHA256, "sha256")
         self.assertEqual(v.verdict, "не найден в VirusTotal")
+        self.assertTrue(v.cacheable)
 
     def test_quota_exceeded(self):
         self._patch_urlopen(_http_error(429))
         v = virustotal.check("8.8.8.8", "ip")
         self.assertIn("429", v.verdict)
+        self.assertFalse(v.cacheable)
 
     def test_network_error(self):
         self._patch_urlopen(urllib.error.URLError("connection refused"))

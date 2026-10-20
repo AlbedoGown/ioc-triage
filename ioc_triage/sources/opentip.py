@@ -59,6 +59,7 @@ def check(indicator: str, indicator_type: str) -> Verdict:
         data = _get(url, api_key)
     except urllib.error.HTTPError as exc:
         verdict.verdict = _http_error_text(exc)
+        verdict.cacheable = exc.code == 404
         return verdict
     except (urllib.error.URLError, socket.timeout, TimeoutError, ConnectionError) as exc:
         verdict.verdict = f"ошибка сети: {_short_err(exc)}"
@@ -68,6 +69,7 @@ def check(indicator: str, indicator_type: str) -> Verdict:
         return verdict
 
     _fill_verdict(verdict, data)
+    verdict.cacheable = True
     return verdict
 
 

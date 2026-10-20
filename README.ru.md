@@ -1,6 +1,6 @@
 <div align="center">
 
-[English](README.md) | **Русский**
+[English](https://github.com/AlbedoGown/ioc-triage/blob/main/README.md) | **Русский**
 
 # ioc-triage
 
@@ -11,7 +11,7 @@ IP · домены · URL · MD5 / SHA1 / SHA256 → VirusTotal, AbuseIPDB, Kasp
 [![tests](https://github.com/AlbedoGown/ioc-triage/actions/workflows/tests.yml/badge.svg)](https://github.com/AlbedoGown/ioc-triage/actions/workflows/tests.yml)
 ![python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
-[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![license](https://img.shields.io/badge/license-MIT-green)](https://github.com/AlbedoGown/ioc-triage/blob/main/LICENSE)
 
 </div>
 
@@ -37,7 +37,8 @@ example.com  domain  abuse.ch/ThreatFox      —                   —          
 - **Автоопределение типа**: IP, домен, URL, MD5, SHA1, SHA256 — указывать вручную не нужно
 - **Шесть источников** через официальные API, у каждого свой модуль с единым интерфейсом
 - **Приватные адреса не уходят наружу**: RFC1918, CGNAT, link-local и loopback помечаются как внутренние без запросов
-- **Учёт лимитов**: пауза под лимит VirusTotal free tier (4 запроса/мин), понятные сообщения при 429
+- **Параллельно и с учётом лимитов**: источники опрашиваются параллельно, у каждого своя пауза между запросами (VirusTotal free tier — 4 запроса/мин); понятные сообщения при 429
+- **Локальный кэш**: результаты хранятся 24 часа, повторная проверка тех же индикаторов не тратит лимит API; сетевые ошибки не кэшируются
 - **Без падений**: нет ключа, сетевая ошибка, неверный ключ — всё это строка в результатах, а не traceback
 - **Вывод для людей и скриптов**: таблица, `--output csv`, `--output json`
 - **Ноль зависимостей**: только стандартная библиотека Python
@@ -63,10 +64,11 @@ cd ioc-triage
 pip install -e .
 
 cp .env.example .env          # впиши свои ключи
-set -a; . ./.env; set +a      # инструмент читает ключи из переменных окружения
 
 echo "8.8.8.8" | ioc-triage
 ```
+
+`.env` из текущей папки подхватывается автоматически, другой файл можно указать через `--env-file`. Переменные, уже заданные в окружении, важнее значений из файла.
 
 ## Использование
 
@@ -83,7 +85,16 @@ grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' firewall.log | sort -u | ioc-triage
 # структурированный вывод
 ioc-triage --input iocs.txt --output json > result.json
 ioc-triage --input iocs.txt --output csv  > result.csv
+
+# кэш: свой срок жизни или без кэша
+ioc-triage --input iocs.txt --cache-ttl 6
+ioc-triage --input iocs.txt --no-cache
+
+# ключи из конкретного файла, меньше параллельных запросов на источник
+ioc-triage --input iocs.txt --env-file ~/secrets/ioc.env --workers 2
 ```
+
+Кэш лежит в `~/.cache/ioc-triage/cache.json` (доступен только тебе) и хранит настоящие ответы источников, включая «не найден». Ошибки, пропущенные источники и ответы о превышении лимита не кэшируются. Пауза для каждого источника задаётся через `VT_RATE_LIMIT_PER_MIN`, `OPENTIP_RATE_LIMIT_PER_MIN`, `ABUSEIPDB_RATE_LIMIT_PER_MIN` и `ABUSECH_RATE_LIMIT_PER_MIN` (пусто — без паузы, для VT по умолчанию 4).
 
 <details>
 <summary>Формат JSON</summary>
@@ -164,7 +175,8 @@ ThreatFox ищет по подстроке, поэтому засчитываю�
 ioc_triage/
 ├── cli.py            # аргументы, чтение входа, маршрутизация по типу
 ├── detect.py         # определение типа индикатора, приватные сети
-├── cache.py          # локальный кэш с TTL (пока не подключён)
+├── cache.py          # локальный кэш с TTL
+├── envfile.py        # загрузка .env
 ├── output.py         # table / csv / json
 └── sources/
     ├── __init__.py   # dataclass Verdict
@@ -191,9 +203,9 @@ python -m unittest discover -s tests -v
 - [x] abuse.ch: URLhaus, ThreatFox, MalwareBazaar
 - [x] VirusTotal и AbuseIPDB, пауза под лимит VT
 - [x] Вывод `table` / `csv` / `json`
-- [ ] Подключить кэш с TTL, чтобы повторные проверки не тратили лимит
-- [ ] Параллельные запросы с отдельным лимитом на каждый источник
-- [ ] Чтение `.env` без ручного экспорта
+- [x] Кэш с TTL, чтобы повторные проверки не тратили лимит
+- [x] Параллельные запросы с отдельным лимитом на каждый источник
+- [x] Чтение `.env` без ручного экспорта
 - [x] Kaspersky OpenTIP как источник
 - [ ] `ioc-triage cve <продукт> <версия>` — поиск уязвимостей через NVD и БДУ ФСТЭК
 - [ ] Публикация на PyPI
@@ -204,4 +216,4 @@ python -m unittest discover -s tests -v
 
 ## Лицензия
 
-[MIT](LICENSE) © 2026 AlbedoGown
+[MIT](https://github.com/AlbedoGown/ioc-triage/blob/main/LICENSE) © 2026 AlbedoGown

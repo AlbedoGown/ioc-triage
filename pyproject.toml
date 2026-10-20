@@ -1,31 +1,39 @@
 [project]
 name = "ioc-triage"
-version = "0.2.0"
-description = "Пакетная проверка индикаторов компрометации через открытые источники репутации"
+version = "0.3.0"
+description = "Bulk IOC triage CLI: VirusTotal, AbuseIPDB, Kaspersky OpenTIP, URLhaus, ThreatFox, MalwareBazaar"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "AlbedoGown" }]
 requires-python = ">=3.10"
 dependencies = []
-keywords = ["ioc", "threat-intelligence", "soc", "virustotal", "abuseipdb", "abuse.ch", "dfir"]
+keywords = ["ioc", "threat-intelligence", "soc", "dfir", "virustotal", "abuseipdb", "abuse.ch", "opentip"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Information Technology",
-    "License :: OSI Approved :: MIT License",
+    "Intended Audience :: System Administrators",
+    "Natural Language :: Russian",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Security",
 ]
 
 [project.urls]
 Homepage = "https://github.com/AlbedoGown/ioc-triage"
 Issues = "https://github.com/AlbedoGown/ioc-triage/issues"
+Changelog = "https://github.com/AlbedoGown/ioc-triage/blob/main/CHANGELOG.md"
 
 [project.scripts]
 ioc-triage = "ioc_triage.cli:main"
 
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]

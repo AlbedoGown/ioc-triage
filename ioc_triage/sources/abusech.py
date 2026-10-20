@@ -13,8 +13,12 @@ import urllib.parse
 import urllib.request
 
 from ioc_triage.sources import Verdict
+from ioc_triage.sources.ratelimit import RateLimiter
 
 API_KEY_ENV = "ABUSECH_AUTH_KEY"
+RATE_LIMIT_ENV = "ABUSECH_RATE_LIMIT_PER_MIN"
+# Один лимитер на все три сервиса: у abuse.ch общий ключ и общая политика fair use.
+limiter = RateLimiter("abuse.ch", RATE_LIMIT_ENV, 0)
 
 URLHAUS_URL = "https://urlhaus-api.abuse.ch/v1/url/"
 URLHAUS_HOST_URL = "https://urlhaus-api.abuse.ch/v1/host/"
@@ -36,21 +40,7 @@ def check(indicator: str, indicator_type: str) -> Verdict:
         return verdict
 
     try:
-        if indicator_type in HASH_TYPES:
-            return _check_malwarebazaar(indicator, indicator_type, api_key)
-        if indicator_type == "url":
-            return _check_urlhaus_url(indicator, api_key)
-        if indicator_type in ("domain", "ip"):
-            # ThreatFox даёт самое широкое покрытие (C2, вредоносные хосты);
-            # если ничего не нашёл — спрашиваем URLhaus про хост как fallback.
-            tf = _check_threatfox(indicator, indicator_type, api_key)
-            if tf.verdict.startswith("не найден"):
-                uh = _check_urlhaus_host(indicator, indicator_type, api_key)
-                if not uh.verdict.startswith("не найден"):
-                    return uh
-            return tf
-        verdict.verdict = "тип индикатора не поддерживается abuse.ch"
-        return verdict
+        result = _route(indicator, indicator_type, api_key)
     except urllib.error.HTTPError as exc:
         if exc.code in (401, 403):
             verdict.verdict = f"отказ в доступе (HTTP {exc.code}): проверь {API_KEY_ENV}"
@@ -66,6 +56,30 @@ def check(indicator: str, indicator_type: str) -> Verdict:
         # Невалидный JSON или неожиданная структура ответа.
         verdict.verdict = f"ошибка разбора ответа: {_short_err(exc)}"
         return verdict
+
+    if result is None:
+        verdict.verdict = "тип индикатора не поддерживается abuse.ch"
+        return verdict
+    # Неизвестный query_status («... вернул статус: X») не кэшируем — это не ответ по индикатору.
+    result.cacheable = "вернул статус" not in result.verdict
+    return result
+
+
+def _route(indicator: str, indicator_type: str, api_key: str) -> Verdict | None:
+    if indicator_type in HASH_TYPES:
+        return _check_malwarebazaar(indicator, indicator_type, api_key)
+    if indicator_type == "url":
+        return _check_urlhaus_url(indicator, api_key)
+    if indicator_type in ("domain", "ip"):
+        # ThreatFox даёт самое широкое покрытие (C2, вредоносные хосты);
+        # если ничего не нашёл — спрашиваем URLhaus про хост как fallback.
+        tf = _check_threatfox(indicator, indicator_type, api_key)
+        if tf.verdict.startswith("не найден"):
+            uh = _check_urlhaus_host(indicator, indicator_type, api_key)
+            if not uh.verdict.startswith("не найден"):
+                return uh
+        return tf
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -214,6 +228,7 @@ def _post_json(url: str, payload: dict, api_key: str) -> dict:
 
 
 def _request(url: str, body: bytes, api_key: str, content_type: str) -> dict:
+    limiter.wait()
     req = urllib.request.Request(
         url,
         data=body,
