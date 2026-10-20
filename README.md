@@ -4,7 +4,7 @@
 
 # ioc-triage
 
-**Bulk triage of indicators of compromise from the terminal**
+**Check a whole batch of IOCs with one command**
 
 IP · domains · URLs · MD5 / SHA1 / SHA256 → VirusTotal, AbuseIPDB, Kaspersky OpenTIP, URLhaus, ThreatFox, MalwareBazaar
 
@@ -17,31 +17,33 @@ IP · domains · URLs · MD5 / SHA1 / SHA256 → VirusTotal, AbuseIPDB, Kaspersk
 
 ---
 
-A SOC analyst gets dozens of indicators from an alert, a log or a threat intel report and checks each one by hand in a browser. `ioc-triage` takes the whole list at once, detects the type of every indicator and queries the matching sources through their official APIs — no scraping of web interfaces.
+You know the drill: an alert, a log or a threat intel report drops thirty IPs and hashes on you, and you paste them into a browser one by one. It's slow, it's boring, and by the twentieth indicator your eyes glaze over.
 
-## Features
+`ioc-triage` takes the whole list in one go. It figures out which line is an IP, a domain or a hash, then asks the right sources about each one through their official APIs. No scraping of web interfaces, just honest API calls with your own keys.
 
-- **Automatic type detection**: IP, domain, URL, MD5, SHA1, SHA256 — no need to specify it
-- **Six sources** via official APIs, each in its own module behind a common interface
-- **Private addresses never leave your network**: RFC1918, CGNAT, link-local and loopback are marked as internal without any request
-- **Parallel, rate-limit aware**: sources are queried in parallel, each with its own request pacing (VirusTotal free tier: 4 requests/min); clear messages on HTTP 429
-- **Local cache**: results are cached for 24 hours, so re-checking the same indicators does not spend API quota; network errors are never cached
-- **Never crashes on a source**: a missing key, a network error or a rejected key becomes a row in the results, not a traceback
-- **Output for humans and scripts**: table, `--output csv`, `--output json`
-- **Zero dependencies**: Python standard library only
+## What it does
+
+- **Detects the type for you.** IP, domain, URL, MD5, SHA1, SHA256: no hints needed.
+- **Six sources.** All through official APIs, each in its own module behind a common interface.
+- **Internal addresses stay internal.** RFC1918, CGNAT, link-local and loopback are flagged as internal right away, without a single outbound request.
+- **Runs in parallel without upsetting the APIs.** Sources are queried at the same time, each with its own pacing (free VirusTotal gives you 4 requests a minute). If you hit a limit and get a 429, the tool tells you so.
+- **Remembers what it already checked.** Results stay in a local cache for 24 hours, so re-running the same indicators doesn't burn your quota. Network errors never get cached.
+- **One flaky source won't take it down.** A missing key, a dropped connection or a rejected key is just a row in the results, not a traceback halfway through.
+- **Talks to humans and scripts.** A table in the terminal, `--output csv` or `--output json`.
+- **Zero dependencies.** Python standard library only, installs in seconds.
 
 ## Sources
 
-| Source | Types | Key | Free tier |
+| Source | Checks | Key | Free tier |
 |---|---|---|---|
-| [VirusTotal](https://www.virustotal.com/) API v3 | hashes, URLs, domains, IPs | `VT_API_KEY` | 4 req/min, 500/day |
-| [AbuseIPDB](https://www.abuseipdb.com/) API v2 | IPs | `ABUSEIPDB_API_KEY` | 1000 checks/day |
+| [VirusTotal](https://www.virustotal.com/) API v3 | hashes, URLs, domains, IPs | `VT_API_KEY` | 4 requests a minute, 500 a day |
+| [AbuseIPDB](https://www.abuseipdb.com/) API v2 | IPs | `ABUSEIPDB_API_KEY` | 1000 checks a day |
 | [Kaspersky OpenTIP](https://opentip.kaspersky.com/) | hashes, URLs, domains, IPs | `OPENTIP_API_KEY` | not published |
-| [MalwareBazaar](https://bazaar.abuse.ch/) | hashes | `ABUSECH_AUTH_KEY` | — |
-| [URLhaus](https://urlhaus.abuse.ch/) | URLs; IPs and domains (fallback) | `ABUSECH_AUTH_KEY` | — |
-| [ThreatFox](https://threatfox.abuse.ch/) | IPs, domains | `ABUSECH_AUTH_KEY` | — |
+| [MalwareBazaar](https://bazaar.abuse.ch/) | hashes | `ABUSECH_AUTH_KEY` | not stated |
+| [URLhaus](https://urlhaus.abuse.ch/) | URLs, plus IPs and domains as a fallback | `ABUSECH_AUTH_KEY` | not stated |
+| [ThreatFox](https://threatfox.abuse.ch/) | IPs, domains | `ABUSECH_AUTH_KEY` | not stated |
 
-All keys are free. A source without a key does not break the run — it is reported as skipped.
+All keys are free. If a key is missing, the run doesn't break: that source is simply reported as skipped.
 
 ## Quick start
 
@@ -55,7 +57,7 @@ cp .env.example .env          # put your keys here
 echo "8.8.8.8" | ioc-triage
 ```
 
-`.env` in the current directory is loaded automatically; another file can be passed with `--env-file`. Variables already set in the environment take precedence over the file.
+A `.env` in the current directory is picked up automatically. If your keys live somewhere else, point to the file with `--env-file`. Variables already set in the environment win over the file.
 
 ## Usage
 
@@ -63,40 +65,42 @@ echo "8.8.8.8" | ioc-triage
 # one indicator per line
 ioc-triage --input iocs.txt
 
-# CSV: name the column that holds the indicator
+# CSV: tell it which column holds the indicator
 ioc-triage --input alerts.csv --column src_ip
 
-# stdin
+# via stdin, e.g. every unique IP from a firewall log
 grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' firewall.log | sort -u | ioc-triage
 
-# structured output
+# structured output for further processing
 ioc-triage --input iocs.txt --output json > result.json
 ioc-triage --input iocs.txt --output csv  > result.csv
 
-# cache: custom lifetime or bypass
+# cache: your own lifetime, or none at all
 ioc-triage --input iocs.txt --cache-ttl 6
 ioc-triage --input iocs.txt --no-cache
 
-# keys from a specific file, fewer parallel requests per source
+# keys from a specific file and fewer parallel requests
 ioc-triage --input iocs.txt --env-file ~/secrets/ioc.env --workers 2
 ```
 
-The cache lives in `~/.cache/ioc-triage/cache.json` (readable only by you) and stores real source answers, including "not found"; errors, skipped sources and rate-limit responses are not cached. Per-source pacing is set with `VT_RATE_LIMIT_PER_MIN`, `OPENTIP_RATE_LIMIT_PER_MIN`, `ABUSEIPDB_RATE_LIMIT_PER_MIN` and `ABUSECH_RATE_LIMIT_PER_MIN` (empty means no pause, VT defaults to 4).
+The cache lives in `~/.cache/ioc-triage/cache.json` and only you can read it. It stores real answers from the sources, "not found" included. Errors, skipped sources and rate-limit responses never go in.
 
-### Output fields
+You can tune the pause for each source with `VT_RATE_LIMIT_PER_MIN`, `OPENTIP_RATE_LIMIT_PER_MIN`, `ABUSEIPDB_RATE_LIMIT_PER_MIN` and `ABUSECH_RATE_LIMIT_PER_MIN`. An empty value means no pause; VT defaults to 4.
 
-One row per indicator and source. The same fields are table columns, CSV columns and JSON keys:
+### What's in the results
 
-| Field | Meaning |
+One row for every indicator and source pair. The fields are the same everywhere: table columns, CSV columns and JSON keys.
+
+| Field | What it holds |
 |---|---|
-| `indicator`, `indicator_type` | the indicator and its detected type |
-| `source` | `virustotal`, `abuseipdb`, `opentip`, `abuse.ch/...`; `local` for internal addresses |
-| `detections` | engines that flagged it (VT), confidence and reports (AbuseIPDB), malware family (abuse.ch), detection names (OpenTIP) |
-| `first_seen` | first seen date, if the source reports it |
+| `indicator`, `indicator_type` | the indicator and its type |
+| `source` | `virustotal`, `abuseipdb`, `opentip`, `abuse.ch/...`, or `local` for internal addresses |
+| `detections` | how many engines fired (VT), confidence and report count (AbuseIPDB), malware family (abuse.ch), detection names (OpenTIP) |
+| `first_seen` | when the indicator was first spotted, if the source knows |
 | `context` | tags, country, provider and other details from the source |
-| `verdict` | the conclusion, or the reason the source was skipped or failed |
+| `verdict` | the conclusion, or why the source was skipped or didn't answer |
 
-Fields hold only what the source actually returns; if a source has no such field, it is empty (`null` in JSON).
+The tool never fills in the blanks: a field only holds what the source actually returned. If a source has no such field, it stays empty (`null` in JSON).
 
 ## Getting API keys
 
@@ -104,11 +108,11 @@ Fields hold only what the source actually returns; if a source has no such field
 <summary><b>VirusTotal</b></summary>
 
 1. Sign up at https://www.virustotal.com/
-2. Copy your key from https://www.virustotal.com/gui/my-apikey into `VT_API_KEY`.
+2. Grab your key at https://www.virustotal.com/gui/my-apikey and put it into `VT_API_KEY`.
 
-The free key allows 4 requests per minute, so the tool waits 15 seconds between requests and reports the wait on stderr. A batch of 100 indicators takes about 25 minutes. With a premium key, raise the limit via `VT_RATE_LIMIT_PER_MIN`.
+The free key gives you just 4 requests a minute, so the tool waits 15 seconds between requests and says so on stderr. A hundred indicators take about 25 minutes: a good moment for a coffee. With a premium key, raise the limit via `VT_RATE_LIMIT_PER_MIN`.
 
-Verdict: 3+ engines flag it as malicious, 1–2 engines as suspicious (a single detection on a popular domain is a typical false positive). Tune with `VT_MALICIOUS_THRESHOLD`.
+How the verdict works: 3 or more engines means "malicious", 1 or 2 means "suspicious". A single detection on a popular domain is almost always a false positive, which is why the threshold isn't one. Change it with `VT_MALICIOUS_THRESHOLD`.
 
 </details>
 
@@ -118,7 +122,7 @@ Verdict: 3+ engines flag it as malicious, 1–2 engines as suspicious (a single 
 1. Sign up at https://www.abuseipdb.com/
 2. Create a key at https://www.abuseipdb.com/account/api and put it into `ABUSEIPDB_API_KEY`.
 
-Reports from the last 90 days are taken into account. Verdict: 75%+ confidence is malicious, 25%+ is suspicious.
+Reports from the last 90 days count. Confidence of 75% or more means "malicious", 25% or more means "suspicious".
 
 </details>
 
@@ -128,29 +132,35 @@ Reports from the last 90 days are taken into account. Verdict: 75%+ confidence i
 1. Sign up at https://opentip.kaspersky.com/ and accept the terms.
 2. Create a key at https://opentip.kaspersky.com/token/ and put it into `OPENTIP_API_KEY`.
 
-Verdict follows the `Zone` field: Red is malicious, Orange/Yellow suspicious, Green clean, Grey no data. Kaspersky does not publish quotas; set `OPENTIP_RATE_LIMIT_PER_MIN` to pace requests. HTTP 403 may mean either a bad key or an exhausted quota. Only reputation lookups are made — files are never uploaded. Note that URL indicators are sent as a query parameter and may end up in the service's logs.
+The verdict comes from the `Zone` field: Red is "malicious", Orange and Yellow are "suspicious", Green is "looks legitimate", Grey is "no data".
+
+A few things to know:
+- Kaspersky doesn't publish its limits, so set your own pacing with `OPENTIP_RATE_LIMIT_PER_MIN`.
+- HTTP 403 can mean either a bad key or a used-up quota.
+- The tool only makes reputation lookups and never uploads files to the cloud.
+- URL indicators travel as a query parameter, so they may end up in the service's logs. Keep that in mind for sensitive URLs.
 
 </details>
 
 <details>
 <summary><b>abuse.ch</b> (URLhaus, ThreatFox, MalwareBazaar)</summary>
 
-Since 2024 the abuse.ch APIs answer `401 Unauthorized` without a key. One key covers all three services:
+Since 2024 the abuse.ch APIs answer `401 Unauthorized` without a key. The good news: one key covers all three services.
 
 1. Sign in at https://auth.abuse.ch/ with GitHub, Google or LinkedIn.
 2. Click "Generate Key" in your profile and put the key into `ABUSECH_AUTH_KEY`.
 
-| Type | Query |
+| Type | Where the query goes |
 |---|---|
 | MD5 / SHA1 / SHA256 | MalwareBazaar `get_info` |
 | URL | URLhaus `/v1/url/` |
-| IP / domain | ThreatFox `search_ioc`; if not found — URLhaus `/v1/host/` |
+| IP / domain | ThreatFox `search_ioc`, and if nothing turns up, URLhaus `/v1/host/` |
 
-ThreatFox searches by substring, so only exact matches count (`google.com` does not match `proxy.google.com`); `ip:port` entries do count for a bare IP.
+ThreatFox has a catch: it searches by substring, so `google.com` happily "matches" something like `proxy.google.com`. That's why only exact matches count. The one exception: `ip:port` entries do count for a bare IP.
 
 </details>
 
-## Architecture
+## How it's built
 
 ```
 ioc_triage/
@@ -168,7 +178,7 @@ ioc_triage/
     └── ratelimit.py  # per-source request pacing
 ```
 
-Every source is a module with `check(indicator, indicator_type) -> Verdict`. A new source is one file plus a line in `SOURCES_BY_TYPE` in `cli.py`.
+Every source is a module with a `check(indicator, indicator_type) -> Verdict` function. Want to add one? One file plus one line in `SOURCES_BY_TYPE` in `cli.py`, and you're done.
 
 ## Development
 
@@ -176,11 +186,11 @@ Every source is a module with `check(indicator, indicator_type) -> Verdict`. A n
 python -m unittest discover -s tests -v
 ```
 
-Tests mock HTTP responses and never touch the network, so no keys are needed.
+Tests mock HTTP responses and never touch the network, so you don't need any keys to run them.
 
 ## Disclaimer
 
-An educational and portfolio project. The tool aggregates public reputation data: it does not replace incident analysis and does not guarantee the accuracy of third-party verdicts. Respect the terms of use of each API.
+This is an educational and portfolio project. The tool brings public reputation data together in one place, but it doesn't replace incident analysis and doesn't vouch for the accuracy of third-party verdicts. And please respect each API's terms of use.
 
 ## License
 
