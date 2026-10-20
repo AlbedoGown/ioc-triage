@@ -9,14 +9,13 @@ import base64
 import json
 import os
 import socket
-import sys
-import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
 from ioc_triage.sources import Verdict
+from ioc_triage.sources.ratelimit import RateLimiter
 
 API_KEY_ENV = "VT_API_KEY"
 RATE_LIMIT_ENV = "VT_RATE_LIMIT_PER_MIN"
@@ -30,7 +29,7 @@ SOURCE = "virustotal"
 
 HASH_TYPES = {"md5", "sha1", "sha256"}
 
-_last_request_at: float | None = None
+limiter = RateLimiter("VirusTotal", RATE_LIMIT_ENV, DEFAULT_RATE_LIMIT_PER_MIN)
 
 
 def check(indicator: str, indicator_type: str) -> Verdict:
@@ -129,29 +128,8 @@ def _http_error_text(exc: urllib.error.HTTPError) -> str:
     return f"ошибка HTTP {exc.code}"
 
 
-def _rate_limit_interval() -> float:
-    try:
-        per_min = float(os.environ.get(RATE_LIMIT_ENV) or DEFAULT_RATE_LIMIT_PER_MIN)
-    except ValueError:
-        per_min = DEFAULT_RATE_LIMIT_PER_MIN
-    return 60.0 / per_min if per_min > 0 else 0.0
-
-
-def _wait_for_slot() -> None:
-    global _last_request_at
-    interval = _rate_limit_interval()
-    now = time.monotonic()
-    if _last_request_at is not None:
-        delay = _last_request_at + interval - now
-        if delay > 0:
-            print(f"VirusTotal: ожидание {delay:.0f} с (лимит запросов)", file=sys.stderr)
-            time.sleep(delay)
-            now = time.monotonic()
-    _last_request_at = now
-
-
 def _get(url: str, api_key: str) -> dict:
-    _wait_for_slot()
+    limiter.wait()
     req = urllib.request.Request(
         url,
         headers={"x-apikey": api_key, "Accept": "application/json", "User-Agent": "ioc-triage/0.1"},

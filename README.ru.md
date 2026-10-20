@@ -6,7 +6,7 @@
 
 **Пакетная проверка индикаторов компрометации из терминала**
 
-IP · домены · URL · MD5 / SHA1 / SHA256 → VirusTotal, AbuseIPDB, URLhaus, ThreatFox, MalwareBazaar
+IP · домены · URL · MD5 / SHA1 / SHA256 → VirusTotal, AbuseIPDB, Kaspersky OpenTIP, URLhaus, ThreatFox, MalwareBazaar
 
 [![tests](https://github.com/AlbedoGown/ioc-triage/actions/workflows/tests.yml/badge.svg)](https://github.com/AlbedoGown/ioc-triage/actions/workflows/tests.yml)
 ![python](https://img.shields.io/badge/python-3.10%2B-blue)
@@ -35,7 +35,7 @@ example.com  domain  abuse.ch/ThreatFox      —                   —          
 ## Возможности
 
 - **Автоопределение типа**: IP, домен, URL, MD5, SHA1, SHA256 — указывать вручную не нужно
-- **Пять источников** через официальные API, у каждого свой модуль с единым интерфейсом
+- **Шесть источников** через официальные API, у каждого свой модуль с единым интерфейсом
 - **Приватные адреса не уходят наружу**: RFC1918, CGNAT, link-local и loopback помечаются как внутренние без запросов
 - **Учёт лимитов**: пауза под лимит VirusTotal free tier (4 запроса/мин), понятные сообщения при 429
 - **Без падений**: нет ключа, сетевая ошибка, неверный ключ — всё это строка в результатах, а не traceback
@@ -48,6 +48,7 @@ example.com  domain  abuse.ch/ThreatFox      —                   —          
 |---|---|---|---|
 | [VirusTotal](https://www.virustotal.com/) API v3 | хеши, URL, домены, IP | `VT_API_KEY` | 4 запроса/мин, 500/сутки |
 | [AbuseIPDB](https://www.abuseipdb.com/) API v2 | IP | `ABUSEIPDB_API_KEY` | 1000 проверок/сутки |
+| [Kaspersky OpenTIP](https://opentip.kaspersky.com/) | хеши, URL, домены, IP | `OPENTIP_API_KEY` | не опубликован |
 | [MalwareBazaar](https://bazaar.abuse.ch/) | хеши | `ABUSECH_AUTH_KEY` | — |
 | [URLhaus](https://urlhaus.abuse.ch/) | URL; IP и домены (резерв) | `ABUSECH_AUTH_KEY` | — |
 | [ThreatFox](https://threatfox.abuse.ch/) | IP, домены | `ABUSECH_AUTH_KEY` | — |
@@ -130,6 +131,16 @@ ioc-triage --input iocs.txt --output csv  > result.csv
 </details>
 
 <details>
+<summary><b>Kaspersky OpenTIP</b></summary>
+
+1. Зарегистрируйся на https://opentip.kaspersky.com/ и прими условия.
+2. Создай ключ на https://opentip.kaspersky.com/token/ и запиши его в `OPENTIP_API_KEY`.
+
+Вердикт берётся из поля `Zone`: Red — «вредоносный», Orange/Yellow — «подозрительный», Green — «похоже на легитимный», Grey — «нет данных». Лимиты Kaspersky не публикует, паузу между запросами задаёт `OPENTIP_RATE_LIMIT_PER_MIN`. HTTP 403 может означать как неверный ключ, так и исчерпанную квоту. Делаются только репутационные запросы, файлы в облако не загружаются. URL-индикатор уходит в параметре запроса и может попасть в логи сервиса.
+
+</details>
+
+<details>
 <summary><b>abuse.ch</b> (URLhaus, ThreatFox, MalwareBazaar)</summary>
 
 С 2024 года API abuse.ch без ключа отвечают `401 Unauthorized`. Ключ один на все три сервиса:
@@ -159,7 +170,9 @@ ioc_triage/
     ├── __init__.py   # dataclass Verdict
     ├── virustotal.py
     ├── abuseipdb.py
-    └── abusech.py    # URLhaus, ThreatFox, MalwareBazaar
+    ├── opentip.py    # Kaspersky OpenTIP
+    ├── abusech.py    # URLhaus, ThreatFox, MalwareBazaar
+    └── ratelimit.py  # пауза между запросами к источнику
 ```
 
 Каждый источник — модуль с функцией `check(indicator, indicator_type) -> Verdict`. Новый источник добавляется одним файлом и строкой в `SOURCES_BY_TYPE` в `cli.py`.
@@ -181,7 +194,7 @@ python -m unittest discover -s tests -v
 - [ ] Подключить кэш с TTL, чтобы повторные проверки не тратили лимит
 - [ ] Параллельные запросы с отдельным лимитом на каждый источник
 - [ ] Чтение `.env` без ручного экспорта
-- [ ] Kaspersky OpenTIP как источник
+- [x] Kaspersky OpenTIP как источник
 - [ ] `ioc-triage cve <продукт> <версия>` — поиск уязвимостей через NVD и БДУ ФСТЭК
 - [ ] Публикация на PyPI
 

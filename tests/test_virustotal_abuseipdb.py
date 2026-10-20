@@ -29,7 +29,7 @@ class VirusTotalTestCase(unittest.TestCase):
         env = mock.patch.dict(os.environ, {virustotal.API_KEY_ENV: "vt-key", virustotal.RATE_LIMIT_ENV: "4"})
         env.start()
         self.addCleanup(env.stop)
-        virustotal._last_request_at = None
+        virustotal.limiter.last_request_at = None
         self.sleep = mock.patch("time.sleep").start()
         self.addCleanup(mock.patch.stopall)
 

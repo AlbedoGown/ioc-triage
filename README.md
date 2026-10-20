@@ -6,7 +6,7 @@
 
 **Bulk triage of indicators of compromise from the terminal**
 
-IP · domains · URLs · MD5 / SHA1 / SHA256 → VirusTotal, AbuseIPDB, URLhaus, ThreatFox, MalwareBazaar
+IP · domains · URLs · MD5 / SHA1 / SHA256 → VirusTotal, AbuseIPDB, Kaspersky OpenTIP, URLhaus, ThreatFox, MalwareBazaar
 
 [![tests](https://github.com/AlbedoGown/ioc-triage/actions/workflows/tests.yml/badge.svg)](https://github.com/AlbedoGown/ioc-triage/actions/workflows/tests.yml)
 ![python](https://img.shields.io/badge/python-3.10%2B-blue)
@@ -35,7 +35,7 @@ example.com  domain  abuse.ch/ThreatFox      —                   —          
 ## Features
 
 - **Automatic type detection**: IP, domain, URL, MD5, SHA1, SHA256 — no need to specify it
-- **Five sources** via official APIs, each in its own module behind a common interface
+- **Six sources** via official APIs, each in its own module behind a common interface
 - **Private addresses never leave your network**: RFC1918, CGNAT, link-local and loopback are marked as internal without any request
 - **Rate-limit aware**: pacing for the VirusTotal free tier (4 requests/min), clear messages on HTTP 429
 - **Never crashes on a source**: a missing key, a network error or a rejected key becomes a row in the results, not a traceback
@@ -48,6 +48,7 @@ example.com  domain  abuse.ch/ThreatFox      —                   —          
 |---|---|---|---|
 | [VirusTotal](https://www.virustotal.com/) API v3 | hashes, URLs, domains, IPs | `VT_API_KEY` | 4 req/min, 500/day |
 | [AbuseIPDB](https://www.abuseipdb.com/) API v2 | IPs | `ABUSEIPDB_API_KEY` | 1000 checks/day |
+| [Kaspersky OpenTIP](https://opentip.kaspersky.com/) | hashes, URLs, domains, IPs | `OPENTIP_API_KEY` | not published |
 | [MalwareBazaar](https://bazaar.abuse.ch/) | hashes | `ABUSECH_AUTH_KEY` | — |
 | [URLhaus](https://urlhaus.abuse.ch/) | URLs; IPs and domains (fallback) | `ABUSECH_AUTH_KEY` | — |
 | [ThreatFox](https://threatfox.abuse.ch/) | IPs, domains | `ABUSECH_AUTH_KEY` | — |
@@ -130,6 +131,16 @@ Reports from the last 90 days are taken into account. Verdict: 75%+ confidence i
 </details>
 
 <details>
+<summary><b>Kaspersky OpenTIP</b></summary>
+
+1. Sign up at https://opentip.kaspersky.com/ and accept the terms.
+2. Create a key at https://opentip.kaspersky.com/token/ and put it into `OPENTIP_API_KEY`.
+
+Verdict follows the `Zone` field: Red is malicious, Orange/Yellow suspicious, Green clean, Grey no data. Kaspersky does not publish quotas; set `OPENTIP_RATE_LIMIT_PER_MIN` to pace requests. HTTP 403 may mean either a bad key or an exhausted quota. Only reputation lookups are made — files are never uploaded. Note that URL indicators are sent as a query parameter and may end up in the service's logs.
+
+</details>
+
+<details>
 <summary><b>abuse.ch</b> (URLhaus, ThreatFox, MalwareBazaar)</summary>
 
 Since 2024 the abuse.ch APIs answer `401 Unauthorized` without a key. One key covers all three services:
@@ -159,7 +170,9 @@ ioc_triage/
     ├── __init__.py   # Verdict dataclass
     ├── virustotal.py
     ├── abuseipdb.py
-    └── abusech.py    # URLhaus, ThreatFox, MalwareBazaar
+    ├── opentip.py    # Kaspersky OpenTIP
+    ├── abusech.py    # URLhaus, ThreatFox, MalwareBazaar
+    └── ratelimit.py  # per-source request pacing
 ```
 
 Every source is a module with `check(indicator, indicator_type) -> Verdict`. A new source is one file plus a line in `SOURCES_BY_TYPE` in `cli.py`.
@@ -182,7 +195,7 @@ Tests mock HTTP responses and never touch the network, so no keys are needed.
 - [ ] Parallel requests with a separate limit per source
 - [ ] Read `.env` without manual export
 - [ ] English output messages
-- [ ] Kaspersky OpenTIP as a source
+- [x] Kaspersky OpenTIP as a source
 - [ ] `ioc-triage cve <product> <version>` — CVE lookup via NVD and the FSTEC BDU (Russian vulnerability database)
 - [ ] Publish to PyPI
 

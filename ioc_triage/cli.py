@@ -4,15 +4,15 @@ import sys
 from ioc_triage.detect import detect_type, is_private_ip
 from ioc_triage.output import render
 from ioc_triage.sources import Verdict
-from ioc_triage.sources import abusech, virustotal, abuseipdb
+from ioc_triage.sources import abusech, virustotal, abuseipdb, opentip
 
 SOURCES_BY_TYPE = {
-    "ip": [abuseipdb.check, virustotal.check, abusech.check],
-    "domain": [virustotal.check, abusech.check],
-    "url": [virustotal.check, abusech.check],
-    "md5": [virustotal.check, abusech.check],
-    "sha1": [virustotal.check, abusech.check],
-    "sha256": [virustotal.check, abusech.check],
+    "ip": [abuseipdb.check, virustotal.check, opentip.check, abusech.check],
+    "domain": [virustotal.check, opentip.check, abusech.check],
+    "url": [virustotal.check, opentip.check, abusech.check],
+    "md5": [virustotal.check, opentip.check, abusech.check],
+    "sha1": [virustotal.check, opentip.check, abusech.check],
+    "sha256": [virustotal.check, opentip.check, abusech.check],
 }
 
 
