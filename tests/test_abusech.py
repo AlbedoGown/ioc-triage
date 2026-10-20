@@ -150,6 +150,42 @@ class HostTests(AbuseChTestCase):
         self.assertEqual(v.detections, "1/2 активных URL")
         self.assertEqual(v.first_seen, "2023-01-01 00:00:00 UTC")
 
+    def test_threatfox_substring_hits_are_ignored(self):
+        self._patch_urlopen(
+            _fake_response(
+                {
+                    "query_status": "ok",
+                    "data": [
+                        {
+                            "ioc": "google-proxy-66-249-88-66.google.com",
+                            "threat_type": "payload_delivery",
+                            "malware_printable": "php.shin_webshell",
+                        }
+                    ],
+                }
+            ),
+            _fake_response({"query_status": "no_results"}),
+        )
+        v = abusech.check("google.com", "domain")
+        self.assertEqual(v.verdict, "не найден в ThreatFox")
+        self.assertIsNone(v.detections)
+
+    def test_threatfox_ip_port_matches_bare_ip(self):
+        self._patch_urlopen(
+            _fake_response(
+                {
+                    "query_status": "ok",
+                    "data": [
+                        {"ioc": "11.22.33.444:8080", "malware_printable": "Other"},
+                        {"ioc": "11.22.33.44:443", "threat_type": "botnet_cc", "malware_printable": "Cobalt Strike"},
+                    ],
+                }
+            )
+        )
+        v = abusech.check("11.22.33.44", "ip")
+        self.assertEqual(v.verdict, "вредоносный (Cobalt Strike)")
+        self.assertIn("ioc=11.22.33.44:443", v.context)
+
     def test_not_found_anywhere(self):
         self._patch_urlopen(
             _fake_response({"query_status": "no_result"}),

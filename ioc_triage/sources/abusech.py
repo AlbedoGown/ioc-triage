@@ -171,7 +171,9 @@ def _check_threatfox(indicator: str, indicator_type: str, api_key: str) -> Verdi
         verdict.verdict = f"ThreatFox вернул статус: {status}"
         return verdict
 
-    rows = data.get("data") or []
+    # search_ioc ищет по подстроке: google.com совпадает с google-proxy-....google.com.
+    # exact_match не подходит — он теряет записи вида ip:port, поэтому фильтруем сами.
+    rows = [r for r in (data.get("data") or []) if _ioc_matches(r.get("ioc"), indicator)]
     if not rows:
         verdict.verdict = "не найден в ThreatFox"
         return verdict
@@ -228,6 +230,15 @@ def _request(url: str, body: bytes, api_key: str, content_type: str) -> dict:
     if not raw:
         return {}
     return json.loads(raw.decode("utf-8"))
+
+
+def _ioc_matches(ioc: str | None, indicator: str) -> bool:
+    """Точное совпадение IOC ThreatFox с индикатором, допускается суффикс :порт."""
+    if not ioc:
+        return False
+    ioc = ioc.lower()
+    indicator = indicator.lower()
+    return ioc == indicator or (ioc.startswith(indicator + ":") and ioc[len(indicator) + 1 :].isdigit())
 
 
 def _source_hint(indicator_type: str) -> str:
