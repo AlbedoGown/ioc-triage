@@ -27,7 +27,6 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/AlbedoGown/ioc-triage"
 Issues = "https://github.com/AlbedoGown/ioc-triage/issues"
-Changelog = "https://github.com/AlbedoGown/ioc-triage/blob/main/CHANGELOG.md"
 
 [project.scripts]
 ioc-triage = "ioc_triage.cli:main"
