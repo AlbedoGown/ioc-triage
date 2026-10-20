@@ -107,6 +107,29 @@ class OpenTipTests(OpenTipTestCase):
         full_url = urlopen.call_args.args[0].full_url
         self.assertTrue(full_url.startswith(f"{opentip.API_BASE}/search/url?request=http%3A%2F%2FExample.com%2Fa%3Fb%3D1%26c%3D"))
 
+    def test_root_url_checked_as_host(self):
+        # search/url отвечает 400 на URL без пути, поэтому идем в search/domain или search/ip.
+        cases = [
+            ("https://Example.com/", "domain", "example.com", "домен example.com"),
+            ("https://example.com", "domain", "example.com", "домен example.com"),
+            ("http://203.0.113.5:8080/", "ip", "203.0.113.5", "IP 203.0.113.5"),
+        ]
+        urlopen = self._patch_urlopen(*[_fake_response({"Zone": "Green"}) for _ in cases])
+        for indicator, search_type, host, note in cases:
+            with self.subTest(indicator=indicator):
+                v = opentip.check(indicator, "url")
+                self.assertEqual(urlopen.call_args.args[0].full_url, f"{opentip.API_BASE}/search/{search_type}?request={host}")
+                self.assertEqual(v.indicator, indicator)
+                self.assertEqual(v.indicator_type, "url")
+                self.assertTrue(v.context.startswith(f"URL без пути, проверен {note}"))
+
+    def test_url_with_path_or_query_stays_url(self):
+        urlopen = self._patch_urlopen(*[_fake_response({"Zone": "Green"}) for _ in range(2)])
+        for indicator in ("https://example.com/a", "https://example.com/?q=1"):
+            with self.subTest(indicator=indicator):
+                opentip.check(indicator, "url")
+                self.assertIn("/search/url?request=", urlopen.call_args.args[0].full_url)
+
     def test_not_found(self):
         self._patch_urlopen(_http_error(404))
         self.assertEqual(opentip.check("example.com", "domain").verdict, "не найден в OpenTIP")
@@ -119,7 +142,7 @@ class OpenTipTests(OpenTipTestCase):
 
     def test_bad_request(self):
         self._patch_urlopen(_http_error(400))
-        self.assertIn("HTTP 400", opentip.check("http://x.example/", "url").verdict)
+        self.assertIn("HTTP 400", opentip.check("http://x.example/a", "url").verdict)
 
     def test_network_error(self):
         self._patch_urlopen(urllib.error.URLError("connection refused"))

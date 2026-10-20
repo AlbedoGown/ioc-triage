@@ -8,6 +8,7 @@
 Файлы в облако намеренно не загружаются — только репутационные запросы.
 """
 
+import ipaddress
 import json
 import os
 import socket
@@ -54,6 +55,11 @@ def check(indicator: str, indicator_type: str) -> Verdict:
         return verdict
 
     value = indicator if indicator_type == "url" else indicator.lower()
+    # search/url отвечает 400 на URL без пути (https://site/), поэтому такой URL
+    # проверяем как домен или IP его хоста.
+    root_lookup = _root_url_lookup(indicator) if indicator_type == "url" else None
+    if root_lookup:
+        search_type, value = root_lookup
     url = f"{API_BASE}/search/{search_type}?request={urllib.parse.quote(value, safe='')}"
     try:
         data = _get(url, api_key)
@@ -69,8 +75,27 @@ def check(indicator: str, indicator_type: str) -> Verdict:
         return verdict
 
     _fill_verdict(verdict, data)
+    if root_lookup:
+        note = f"URL без пути, проверен {'IP' if root_lookup[0] == 'ip' else 'домен'} {root_lookup[1]}"
+        verdict.context = f"{note}; {verdict.context}" if verdict.context else note
     verdict.cacheable = True
     return verdict
+
+
+def _root_url_lookup(indicator: str) -> tuple[str, str] | None:
+    """Для URL без пути, query и fragment возвращает (тип поиска, хост), иначе None."""
+    try:
+        parts = urllib.parse.urlsplit(indicator if "://" in indicator else f"http://{indicator}")
+        host = parts.hostname
+    except ValueError:
+        return None
+    if not host or parts.path not in ("", "/") or parts.query or parts.fragment:
+        return None
+    try:
+        ipaddress.ip_address(host)
+        return "ip", host
+    except ValueError:
+        return "domain", host
 
 
 def _fill_verdict(verdict: Verdict, data: dict) -> None:
