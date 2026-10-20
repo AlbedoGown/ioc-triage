@@ -1,7 +1,6 @@
 """Потокобезопасный ограничитель частоты запросов: не чаще N в минуту на источник."""
 
 import os
-import sys
 import threading
 import time
 
@@ -14,12 +13,19 @@ class RateLimiter:
         self.next_slot: float | None = None
         self._lock = threading.Lock()
 
-    def interval(self) -> float:
+    def per_min(self) -> float:
         try:
-            per_min = float(os.environ.get(self.env_var) or self.default_per_min)
+            return float(os.environ.get(self.env_var) or self.default_per_min)
         except ValueError:
-            per_min = self.default_per_min
+            return float(self.default_per_min)
+
+    def interval(self) -> float:
+        per_min = self.per_min()
         return 60.0 / per_min if per_min > 0 else 0.0
+
+    def estimate(self, requests: int) -> float:
+        """Сколько секунд займут requests запросов подряд с учетом паузы."""
+        return max(requests - 1, 0) * self.interval()
 
     def wait(self) -> None:
         """Резервирует ближайший свободный слот и спит до него (вне блокировки)."""
@@ -29,6 +35,4 @@ class RateLimiter:
             self.next_slot = slot + self.interval()
         delay = slot - now
         if delay > 0:
-            if delay >= 1:
-                print(f"{self.name}: ожидание {delay:.0f} с (лимит запросов)", file=sys.stderr)
             time.sleep(delay)

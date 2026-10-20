@@ -1,5 +1,8 @@
 import argparse
+import os
 import sys
+import threading
+from collections import Counter
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, Optional
@@ -56,6 +59,49 @@ def local_verdict(indicator: str, indicator_type: str) -> Optional[Verdict]:
     return None
 
 
+def format_duration(seconds: float) -> str:
+    if seconds < 90:
+        return f"{round(seconds)} с"
+    return f"{round(seconds / 60)} мин"
+
+
+def announce_rate_limits(requests_by_source: Counter) -> None:
+    """Одна строка на источник с лимитом: сколько запросов и сколько примерно ждать."""
+    for check_fn, count in requests_by_source.items():
+        limiter = getattr(sys.modules.get(check_fn.__module__), "limiter", None)
+        if limiter is None:
+            continue
+        seconds = limiter.estimate(count)
+        if seconds >= 1:
+            print(
+                f"{limiter.name}: {count} запросов при лимите {limiter.per_min():g} в минуту, "
+                f"это займет около {format_duration(seconds)}",
+                file=sys.stderr,
+            )
+
+
+class Progress:
+    """Строка «готово k из n» в stderr, только если stderr это терминал."""
+
+    def __init__(self, total: int):
+        self.total = total
+        self.done = 0
+        self.enabled = total > 0 and sys.stderr.isatty()
+        self._lock = threading.Lock()
+
+    def tick(self, _future: Future) -> None:
+        with self._lock:
+            self.done += 1
+            if self.enabled:
+                sys.stderr.write(f"\rготово {self.done} из {self.total}")
+                sys.stderr.flush()
+
+    def clear(self) -> None:
+        if self.enabled:
+            sys.stderr.write("\r\033[K")
+            sys.stderr.flush()
+
+
 def check_indicators(
     indicators: list[str],
     cache: Optional[Cache] = None,
@@ -68,7 +114,10 @@ def check_indicators(
     executors: dict[CheckFn, ThreadPoolExecutor] = {}
     pending: dict[str, Future] = {}
     slots: list[Verdict | tuple[str, Future]] = []
+    requests_by_source: Counter = Counter()
     cache_hits = 0
+    interrupted = False
+    progress: Optional[Progress] = None
 
     try:
         for indicator in indicators:
@@ -91,7 +140,13 @@ def check_indicators(
                             max_workers=workers_per_source, thread_name_prefix=source_name(check_fn)
                         )
                     pending[key] = executors[check_fn].submit(check_fn, indicator, indicator_type)
+                    requests_by_source[check_fn] += 1
                 slots.append((key, pending[key]))
+
+        announce_rate_limits(requests_by_source)
+        progress = Progress(len(pending))
+        for future in pending.values():
+            future.add_done_callback(progress.tick)
 
         results = []
         stored = set()
@@ -105,9 +160,15 @@ def check_indicators(
                 cache.set(key, verdict.to_dict())
                 stored.add(key)
             results.append(verdict)
+    except KeyboardInterrupt:
+        interrupted = True
+        raise
     finally:
+        if progress:
+            progress.clear()
+        # При Ctrl+C не ждем потоки, которые спят в паузе под лимит.
         for executor in executors.values():
-            executor.shutdown(wait=True, cancel_futures=True)
+            executor.shutdown(wait=not interrupted, cancel_futures=True)
 
     if cache_hits:
         print(f"Из кэша: {cache_hits}", file=sys.stderr)
@@ -148,7 +209,15 @@ def main() -> None:
 
     cache = None if args.no_cache else Cache(ttl=int(args.cache_ttl * 3600))
     indicators = read_indicators(args)
-    verdicts = check_indicators(indicators, cache=cache, workers_per_source=args.workers)
+    try:
+        verdicts = check_indicators(indicators, cache=cache, workers_per_source=args.workers)
+    except KeyboardInterrupt:
+        # os._exit не ждет рабочие потоки (пауза под лимит или запрос в сети), иначе Ctrl+C
+        # срабатывал бы только после них. Кэш пишется атомарно, прерывание его не портит.
+        print("\nПрервано.", file=sys.stderr)
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(130)
 
     if not verdicts:
         print("Нет результатов.", file=sys.stderr)

@@ -1,11 +1,15 @@
 """Тесты кэша, загрузки .env, лимитера и параллельной проверки в cli."""
 
+import io
 import json
 import os
+import sys
 import tempfile
 import threading
 import time
+import types
 import unittest
+from collections import Counter
 from pathlib import Path
 from unittest import mock
 
@@ -97,6 +101,63 @@ class RateLimiterTests(unittest.TestCase):
             for t in threads:
                 t.join()
         self.assertEqual(sorted(delays), [1.0, 2.0, 3.0])
+
+    def test_estimate(self):
+        limiter = RateLimiter("test", "IOC_T_RATE", 4)  # интервал 15 с
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("IOC_T_RATE", None)
+            self.assertEqual(limiter.estimate(0), 0)
+            self.assertEqual(limiter.estimate(1), 0)
+            self.assertEqual(limiter.estimate(5), 60)
+            os.environ["IOC_T_RATE"] = ""
+            self.assertEqual(limiter.estimate(5), 60)
+        no_limit = RateLimiter("test", "IOC_T_RATE_NONE", 0)
+        self.assertEqual(no_limit.estimate(10), 0)
+
+    def test_wait_prints_nothing(self):
+        limiter = RateLimiter("test", "IOC_T_RATE", 60)
+        with mock.patch("time.monotonic", return_value=50.0), mock.patch("time.sleep"), mock.patch(
+            "sys.stderr", new_callable=io.StringIO
+        ) as err:
+            limiter.wait()
+            limiter.wait()
+        self.assertEqual(err.getvalue(), "")
+
+
+class AnnounceAndProgressTests(unittest.TestCase):
+    def test_format_duration(self):
+        self.assertEqual(cli.format_duration(59.4), "59 с")
+        self.assertEqual(cli.format_duration(60), "60 с")
+        self.assertEqual(cli.format_duration(1500), "25 мин")
+
+    def test_announce_only_for_limited_sources(self):
+        def limited(indicator, indicator_type):
+            return None
+
+        def unlimited(indicator, indicator_type):
+            return None
+
+        fake_limited = types.ModuleType("fake_limited")
+        fake_limited.limiter = RateLimiter("Limited", "IOC_T_RATE_A", 4)
+        fake_unlimited = types.ModuleType("fake_unlimited")
+        fake_unlimited.limiter = RateLimiter("Unlimited", "IOC_T_RATE_B", 0)
+        limited.__module__ = "fake_limited"
+        unlimited.__module__ = "fake_unlimited"
+        counts = Counter({limited: 5, unlimited: 5})
+        with mock.patch.dict(sys.modules, {"fake_limited": fake_limited, "fake_unlimited": fake_unlimited}), mock.patch(
+            "sys.stderr", new_callable=io.StringIO
+        ) as err:
+            cli.announce_rate_limits(counts)
+        self.assertEqual(err.getvalue(), "Limited: 5 запросов при лимите 4 в минуту, это займет около 60 с\n")
+
+    def test_progress_silent_without_tty(self):
+        with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+            progress = cli.Progress(2)
+            progress.tick(None)
+            progress.tick(None)
+            progress.clear()
+        self.assertEqual(progress.done, 2)
+        self.assertEqual(err.getvalue(), "")
 
 
 def _fake_source(name: str, calls: list, verdict_text: str = "чисто", cacheable: bool = True, delay: float = 0.0):

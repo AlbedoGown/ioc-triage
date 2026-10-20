@@ -115,7 +115,7 @@ The tool never fills in the blanks: a field only holds what the source actually 
 1. Sign up at https://www.virustotal.com/
 2. Grab your key at https://www.virustotal.com/gui/my-apikey and put it into `VT_API_KEY`.
 
-The free key gives you just 4 requests a minute, so the tool waits 15 seconds between requests and says so on stderr. A hundred indicators take about 25 minutes. With a premium key, raise the limit via `VT_RATE_LIMIT_PER_MIN`.
+The free key gives you just 4 requests a minute, so the tool waits 15 seconds between requests. At the start it prints on stderr how long the run will take, and in a terminal it shows a progress line. A hundred indicators take about 25 minutes. Ctrl+C stops the run right away. With a premium key, raise the limit via `VT_RATE_LIMIT_PER_MIN`.
 
 How the verdict works: 3 or more engines means "malicious", 1 or 2 means "suspicious". A single detection on a popular domain is almost always a false positive, which is why the threshold isn't one. Change it with `VT_MALICIOUS_THRESHOLD`.
 
