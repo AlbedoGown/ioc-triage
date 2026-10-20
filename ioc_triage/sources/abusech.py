@@ -12,7 +12,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from ioc_triage.sources import Verdict
+from ioc_triage.sources import USER_AGENT, Verdict
 from ioc_triage.sources.ratelimit import RateLimiter
 
 API_KEY_ENV = "ABUSECH_AUTH_KEY"
@@ -236,7 +236,7 @@ def _request(url: str, body: bytes, api_key: str, content_type: str) -> dict:
             "Auth-Key": api_key,
             "Content-Type": content_type,
             "Accept": "application/json",
-            "User-Agent": "ioc-triage/0.1",
+            "User-Agent": USER_AGENT,
         },
         method="POST",
     )

@@ -11,7 +11,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from ioc_triage.sources import Verdict
+from ioc_triage.sources import USER_AGENT, Verdict
 from ioc_triage.sources.ratelimit import RateLimiter
 
 API_KEY_ENV = "ABUSEIPDB_API_KEY"
@@ -93,7 +93,7 @@ def _get(url: str, api_key: str) -> dict:
     limiter.wait()
     req = urllib.request.Request(
         url,
-        headers={"Key": api_key, "Accept": "application/json", "User-Agent": "ioc-triage/0.1"},
+        headers={"Key": api_key, "Accept": "application/json", "User-Agent": USER_AGENT},
         method="GET",
     )
     with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:

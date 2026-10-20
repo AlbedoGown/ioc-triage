@@ -1,5 +1,11 @@
 from dataclasses import dataclass, field
+from importlib.metadata import PackageNotFoundError, version
 from typing import Optional
+
+try:
+    USER_AGENT = f"ioc-triage/{version('ioc-triage')}"
+except PackageNotFoundError:
+    USER_AGENT = "ioc-triage"
 
 PUBLIC_FIELDS = ("indicator", "indicator_type", "source", "detections", "first_seen", "context", "verdict")
 
