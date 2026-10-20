@@ -21,6 +21,8 @@ from ioc_triage.sources import Verdict
 API_KEY_ENV = "VT_API_KEY"
 RATE_LIMIT_ENV = "VT_RATE_LIMIT_PER_MIN"
 DEFAULT_RATE_LIMIT_PER_MIN = 4
+MALICIOUS_THRESHOLD_ENV = "VT_MALICIOUS_THRESHOLD"
+DEFAULT_MALICIOUS_THRESHOLD = 3
 
 API_BASE = "https://www.virustotal.com/api/v3"
 HTTP_TIMEOUT = 20
@@ -101,12 +103,20 @@ def _fill_verdict(verdict: Verdict, attrs: dict, indicator_type: str) -> None:
 
     if not total:
         verdict.verdict = "нет результатов анализа в VirusTotal"
-    elif malicious:
+    elif malicious >= _malicious_threshold():
         verdict.verdict = f"вредоносный ({label})" if label else "вредоносный"
-    elif suspicious:
+    elif malicious or suspicious:
+        # 1–2 движка на популярных доменах — типичное ложное срабатывание.
         verdict.verdict = "подозрительный"
     else:
         verdict.verdict = "похоже на легитимный"
+
+
+def _malicious_threshold() -> int:
+    try:
+        return max(1, int(os.environ.get(MALICIOUS_THRESHOLD_ENV) or DEFAULT_MALICIOUS_THRESHOLD))
+    except ValueError:
+        return DEFAULT_MALICIOUS_THRESHOLD
 
 
 def _http_error_text(exc: urllib.error.HTTPError) -> str:

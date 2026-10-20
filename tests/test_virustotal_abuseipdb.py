@@ -93,6 +93,27 @@ class VirusTotalTests(VirusTotalTestCase):
         self.assertEqual(v.verdict, "подозрительный")
         self.assertEqual(v.context, "suspicious=2; reputation=-5")
 
+    def test_single_engine_is_only_suspicious(self):
+        self._patch_urlopen(
+            _fake_response({"data": {"attributes": {"last_analysis_stats": {"malicious": 1, "harmless": 91}}}})
+        )
+        v = virustotal.check("google.com", "domain")
+        self.assertEqual(v.verdict, "подозрительный")
+        self.assertEqual(v.detections, "1/92")
+
+    def test_threshold_reached_is_malicious(self):
+        self._patch_urlopen(
+            _fake_response({"data": {"attributes": {"last_analysis_stats": {"malicious": 3, "harmless": 89}}}})
+        )
+        self.assertEqual(virustotal.check("evil.example", "domain").verdict, "вредоносный")
+
+    def test_threshold_is_configurable(self):
+        self._patch_urlopen(
+            _fake_response({"data": {"attributes": {"last_analysis_stats": {"malicious": 1, "harmless": 91}}}})
+        )
+        with mock.patch.dict(os.environ, {virustotal.MALICIOUS_THRESHOLD_ENV: "1"}):
+            self.assertEqual(virustotal.check("evil.example", "domain").verdict, "вредоносный")
+
     def test_not_found(self):
         self._patch_urlopen(_http_error(404))
         v = virustotal.check(EICAR_SHA256, "sha256")

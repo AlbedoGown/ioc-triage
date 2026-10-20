@@ -1,0 +1,194 @@
+<div align="center">
+
+[English](README.md) | **Русский**
+
+# ioc-triage
+
+**Пакетная проверка индикаторов компрометации из терминала**
+
+IP · домены · URL · MD5 / SHA1 / SHA256 → VirusTotal, AbuseIPDB, URLhaus, ThreatFox, MalwareBazaar
+
+[![tests](https://github.com/AlbedoGown/ioc-triage/actions/workflows/tests.yml/badge.svg)](https://github.com/AlbedoGown/ioc-triage/actions/workflows/tests.yml)
+![python](https://img.shields.io/badge/python-3.10%2B-blue)
+![dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+</div>
+
+---
+
+SOC-аналитик получает из алерта, лога или отчёта threat intel десятки индикаторов и проверяет каждый вручную в браузере. `ioc-triage` берёт весь список сразу, сам определяет тип каждого индикатора и опрашивает подходящие источники через их официальные API — без скрейпинга веб-интерфейсов.
+
+```console
+$ ioc-triage --input iocs.txt
+Индикатор    Тип     Источник                Детекты             Впервые замечен  Вывод
+-----------  ------  ----------------------  ------------------  ---------------  ------------------------------------------
+<sha256>     sha256  virustotal              <N>/<M>             <дата>           вредоносный (<метка VT>)
+<sha256>     sha256  abuse.ch/MalwareBazaar  <семейство>         <дата>           вредоносный (<семейство>)
+<ip>         ip      abuseipdb               <score>% (<N> жалоб)  —              вредоносный
+example.com  domain  abuse.ch/ThreatFox      —                   —                не найден в ThreatFox
+10.0.0.5     ip      local                   —                   —                внутренний адрес, проверка не имеет смысла
+```
+
+<sub>Схема вывода: значения в угловых скобках подставляются из ответов API.</sub>
+
+## Возможности
+
+- **Автоопределение типа**: IP, домен, URL, MD5, SHA1, SHA256 — указывать вручную не нужно
+- **Пять источников** через официальные API, у каждого свой модуль с единым интерфейсом
+- **Приватные адреса не уходят наружу**: RFC1918, CGNAT, link-local и loopback помечаются как внутренние без запросов
+- **Учёт лимитов**: пауза под лимит VirusTotal free tier (4 запроса/мин), понятные сообщения при 429
+- **Без падений**: нет ключа, сетевая ошибка, неверный ключ — всё это строка в результатах, а не traceback
+- **Вывод для людей и скриптов**: таблица, `--output csv`, `--output json`
+- **Ноль зависимостей**: только стандартная библиотека Python
+
+## Источники
+
+| Источник | Типы | Ключ | Бесплатный лимит |
+|---|---|---|---|
+| [VirusTotal](https://www.virustotal.com/) API v3 | хеши, URL, домены, IP | `VT_API_KEY` | 4 запроса/мин, 500/сутки |
+| [AbuseIPDB](https://www.abuseipdb.com/) API v2 | IP | `ABUSEIPDB_API_KEY` | 1000 проверок/сутки |
+| [MalwareBazaar](https://bazaar.abuse.ch/) | хеши | `ABUSECH_AUTH_KEY` | — |
+| [URLhaus](https://urlhaus.abuse.ch/) | URL; IP и домены (резерв) | `ABUSECH_AUTH_KEY` | — |
+| [ThreatFox](https://threatfox.abuse.ch/) | IP, домены | `ABUSECH_AUTH_KEY` | — |
+
+Все ключи бесплатные. Источник без ключа не ломает проверку, а помечается как «пропущено (нет …)».
+
+## Быстрый старт
+
+```bash
+git clone https://github.com/AlbedoGown/ioc-triage.git
+cd ioc-triage
+pip install -e .
+
+cp .env.example .env          # впиши свои ключи
+set -a; . ./.env; set +a      # инструмент читает ключи из переменных окружения
+
+echo "8.8.8.8" | ioc-triage
+```
+
+## Использование
+
+```bash
+# список индикаторов построчно
+ioc-triage --input iocs.txt
+
+# CSV: указать столбец с индикатором
+ioc-triage --input alerts.csv --column src_ip
+
+# stdin
+grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' firewall.log | sort -u | ioc-triage
+
+# структурированный вывод
+ioc-triage --input iocs.txt --output json > result.json
+ioc-triage --input iocs.txt --output csv  > result.csv
+```
+
+<details>
+<summary>Формат JSON</summary>
+
+```json
+[
+  {
+    "indicator": "<ip>",
+    "indicator_type": "ip",
+    "source": "abuseipdb",
+    "detections": "<score>% (<N> жалоб)",
+    "first_seen": null,
+    "context": "последняя жалоба <дата>; <страна>; <провайдер>; <тип использования>",
+    "verdict": "вредоносный"
+  }
+]
+```
+
+`detections`, `first_seen` и `context` заполняются только тем, что реально отдаёт источник; если поля у источника нет — `null`.
+
+</details>
+
+## Получение ключей
+
+<details>
+<summary><b>VirusTotal</b></summary>
+
+1. Зарегистрируйся на https://www.virustotal.com/
+2. Скопируй ключ на https://www.virustotal.com/gui/my-apikey в `VT_API_KEY`.
+
+Бесплатный ключ даёт 4 запроса в минуту: между запросами инструмент ждёт 15 секунд и пишет об этом в stderr. Пакет из 100 индикаторов проверяется около 25 минут. Для премиум-ключа подними лимит через `VT_RATE_LIMIT_PER_MIN`.
+
+Вердикт: от 3 сработавших движков — «вредоносный», 1–2 — «подозрительный» (одиночный детект на популярном домене — типичное ложное срабатывание). Порог задаётся через `VT_MALICIOUS_THRESHOLD`.
+
+</details>
+
+<details>
+<summary><b>AbuseIPDB</b></summary>
+
+1. Зарегистрируйся на https://www.abuseipdb.com/
+2. Создай ключ на https://www.abuseipdb.com/account/api и запиши его в `ABUSEIPDB_API_KEY`.
+
+Учитываются жалобы за последние 90 дней. Вердикт: от 75% уверенности — «вредоносный», от 25% — «подозрительный».
+
+</details>
+
+<details>
+<summary><b>abuse.ch</b> (URLhaus, ThreatFox, MalwareBazaar)</summary>
+
+С 2024 года API abuse.ch без ключа отвечают `401 Unauthorized`. Ключ один на все три сервиса:
+
+1. Войди на https://auth.abuse.ch/ через GitHub, Google или LinkedIn.
+2. Нажми «Generate Key» в профиле и запиши ключ в `ABUSECH_AUTH_KEY`.
+
+| Тип | Запрос |
+|---|---|
+| MD5 / SHA1 / SHA256 | MalwareBazaar `get_info` |
+| URL | URLhaus `/v1/url/` |
+| IP / домен | ThreatFox `search_ioc`; если не найден — URLhaus `/v1/host/` |
+
+ThreatFox ищет по подстроке, поэтому засчитываются только точные совпадения (`google.com` не совпадёт с `proxy.google.com`); записи вида `ip:port` учитываются для голого IP.
+
+</details>
+
+## Архитектура
+
+```
+ioc_triage/
+├── cli.py            # аргументы, чтение входа, маршрутизация по типу
+├── detect.py         # определение типа индикатора, приватные сети
+├── cache.py          # локальный кэш с TTL (пока не подключён)
+├── output.py         # table / csv / json
+└── sources/
+    ├── __init__.py   # dataclass Verdict
+    ├── virustotal.py
+    ├── abuseipdb.py
+    └── abusech.py    # URLhaus, ThreatFox, MalwareBazaar
+```
+
+Каждый источник — модуль с функцией `check(indicator, indicator_type) -> Verdict`. Новый источник добавляется одним файлом и строкой в `SOURCES_BY_TYPE` в `cli.py`.
+
+## Разработка
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+Тесты подменяют HTTP-ответы и не ходят в сеть, ключи для них не нужны.
+
+## Roadmap
+
+- [x] Автоопределение типа индикатора
+- [x] abuse.ch: URLhaus, ThreatFox, MalwareBazaar
+- [x] VirusTotal и AbuseIPDB, пауза под лимит VT
+- [x] Вывод `table` / `csv` / `json`
+- [ ] Подключить кэш с TTL, чтобы повторные проверки не тратили лимит
+- [ ] Параллельные запросы с отдельным лимитом на каждый источник
+- [ ] Чтение `.env` без ручного экспорта
+- [ ] Kaspersky OpenTIP как источник
+- [ ] `ioc-triage cve <продукт> <версия>` — поиск уязвимостей через NVD и БДУ ФСТЭК
+- [ ] Публикация на PyPI
+
+## Отказ от ответственности
+
+Учебный и портфолио-проект. Инструмент агрегирует публичные данные репутации: он не заменяет анализ инцидента и не гарантирует точность вердиктов сторонних источников. Соблюдай условия использования каждого API.
+
+## Лицензия
+
+[MIT](LICENSE) © 2026 AlbedoGown

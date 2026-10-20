@@ -1,9 +1,25 @@
 [project]
 name = "ioc-triage"
-version = "0.1.0"
+version = "0.2.0"
 description = "Пакетная проверка индикаторов компрометации через открытые источники репутации"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "AlbedoGown" }]
 requires-python = ">=3.10"
 dependencies = []
+keywords = ["ioc", "threat-intelligence", "soc", "virustotal", "abuseipdb", "abuse.ch", "dfir"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+]
+
+[project.urls]
+Homepage = "https://github.com/AlbedoGown/ioc-triage"
+Issues = "https://github.com/AlbedoGown/ioc-triage/issues"
 
 [project.scripts]
 ioc-triage = "ioc_triage.cli:main"
@@ -11,3 +27,6 @@ ioc-triage = "ioc_triage.cli:main"
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["ioc_triage*"]
