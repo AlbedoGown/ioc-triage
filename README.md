@@ -19,18 +19,6 @@ IP · domains · URLs · MD5 / SHA1 / SHA256 → VirusTotal, AbuseIPDB, Kaspersk
 
 A SOC analyst gets dozens of indicators from an alert, a log or a threat intel report and checks each one by hand in a browser. `ioc-triage` takes the whole list at once, detects the type of every indicator and queries the matching sources through their official APIs — no scraping of web interfaces.
 
-## Why several sources
-
-Results of live checks (October 2026):
-
-| Indicator | VirusTotal | abuse.ch | What ioc-triage reports |
-|---|---|---|---|
-| `203.195.219.186`, a C2 server | 0/92, clean | ThreatFox: VShell | VirusTotal sees nothing; the C2 is caught only by ThreatFox |
-| `google.com` | 1/92 | ThreatFox: only substring hits such as `google-proxy-66-249-88-66.google.com` | «подозрительный», not «вредоносный»: one engine is below the threshold of 3; substring hits are ignored |
-| SHA256 of a sample taken from MalwareBazaar | 23/75, `trojan.cryxos/alien` | — | «вредоносный (trojan.cryxos/alien)» |
-
-A single source either misses threats or raises false alarms. Several sources side by side, with precise matching, give a verdict an analyst can act on. Table headers and verdicts are printed in Russian.
-
 ## Features
 
 - **Automatic type detection**: IP, domain, URL, MD5, SHA1, SHA256 — no need to specify it
