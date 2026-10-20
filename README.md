@@ -19,18 +19,17 @@ IP · domains · URLs · MD5 / SHA1 / SHA256 → VirusTotal, AbuseIPDB, Kaspersk
 
 A SOC analyst gets dozens of indicators from an alert, a log or a threat intel report and checks each one by hand in a browser. `ioc-triage` takes the whole list at once, detects the type of every indicator and queries the matching sources through their official APIs — no scraping of web interfaces.
 
-```console
-$ ioc-triage --input iocs.txt
-Индикатор    Тип     Источник                Детекты             Впервые замечен  Вывод
------------  ------  ----------------------  ------------------  ---------------  ------------------------------------------
-<sha256>     sha256  virustotal              <N>/<M>             <date>           вредоносный (<VT label>)
-<sha256>     sha256  abuse.ch/MalwareBazaar  <family>            <date>           вредоносный (<family>)
-<ip>         ip      abuseipdb               <score>% (<N> жалоб)  —              вредоносный
-example.com  domain  abuse.ch/ThreatFox      —                   —                не найден в ThreatFox
-10.0.0.5     ip      local                   —                   —                внутренний адрес, проверка не имеет смысла
-```
+## Why several sources
 
-<sub>Output layout; values in angle brackets come from API responses. Table headers and verdicts are currently in Russian.</sub>
+Results of live checks (October 2026):
+
+| Indicator | VirusTotal | abuse.ch | What ioc-triage reports |
+|---|---|---|---|
+| `203.195.219.186`, a C2 server | 0/92, clean | ThreatFox: VShell | VirusTotal sees nothing; the C2 is caught only by ThreatFox |
+| `google.com` | 1/92 | ThreatFox: only substring hits such as `google-proxy-66-249-88-66.google.com` | «подозрительный», not «вредоносный»: one engine is below the threshold of 3; substring hits are ignored |
+| SHA256 of a sample taken from MalwareBazaar | 23/75, `trojan.cryxos/alien` | — | «вредоносный (trojan.cryxos/alien)» |
+
+A single source either misses threats or raises false alarms. Several sources side by side, with precise matching, give a verdict an analyst can act on. Table headers and verdicts are printed in Russian.
 
 ## Features
 
@@ -96,26 +95,20 @@ ioc-triage --input iocs.txt --env-file ~/secrets/ioc.env --workers 2
 
 The cache lives in `~/.cache/ioc-triage/cache.json` (readable only by you) and stores real source answers, including "not found"; errors, skipped sources and rate-limit responses are not cached. Per-source pacing is set with `VT_RATE_LIMIT_PER_MIN`, `OPENTIP_RATE_LIMIT_PER_MIN`, `ABUSEIPDB_RATE_LIMIT_PER_MIN` and `ABUSECH_RATE_LIMIT_PER_MIN` (empty means no pause, VT defaults to 4).
 
-<details>
-<summary>JSON format</summary>
+### Output fields
 
-```json
-[
-  {
-    "indicator": "<ip>",
-    "indicator_type": "ip",
-    "source": "abuseipdb",
-    "detections": "<score>% (<N> жалоб)",
-    "first_seen": null,
-    "context": "последняя жалоба <date>; <country>; <ISP>; <usage type>",
-    "verdict": "вредоносный"
-  }
-]
-```
+One row per indicator and source. The same fields are table columns, CSV columns and JSON keys:
 
-`detections`, `first_seen` and `context` hold only what the source actually returns; a field the source does not provide is `null`.
+| Field | Meaning |
+|---|---|
+| `indicator`, `indicator_type` | the indicator and its detected type |
+| `source` | `virustotal`, `abuseipdb`, `opentip`, `abuse.ch/...`; `local` for internal addresses |
+| `detections` | engines that flagged it (VT), confidence and reports (AbuseIPDB), malware family (abuse.ch), detection names (OpenTIP) |
+| `first_seen` | first seen date, if the source reports it |
+| `context` | tags, country, provider and other details from the source |
+| `verdict` | the conclusion, or the reason the source was skipped or failed |
 
-</details>
+Fields hold only what the source actually returns; if a source has no such field, it is empty (`null` in JSON).
 
 ## Getting API keys
 
@@ -196,20 +189,6 @@ python -m unittest discover -s tests -v
 ```
 
 Tests mock HTTP responses and never touch the network, so no keys are needed.
-
-## Roadmap
-
-- [x] Indicator type detection
-- [x] abuse.ch: URLhaus, ThreatFox, MalwareBazaar
-- [x] VirusTotal and AbuseIPDB, VT rate-limit pacing
-- [x] `table` / `csv` / `json` output
-- [x] TTL cache so repeated checks do not spend quota
-- [x] Parallel requests with a separate limit per source
-- [x] Read `.env` without manual export
-- [ ] English output messages
-- [x] Kaspersky OpenTIP as a source
-- [ ] `ioc-triage cve <product> <version>` — CVE lookup via NVD and the FSTEC BDU (Russian vulnerability database)
-- [ ] Publish to PyPI
 
 ## Disclaimer
 
