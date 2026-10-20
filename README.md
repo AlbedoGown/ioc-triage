@@ -17,20 +17,18 @@ IP · domains · URLs · MD5 / SHA1 / SHA256 → VirusTotal, AbuseIPDB, Kaspersk
 
 ---
 
-You know the drill: an alert, a log or a threat intel report drops thirty IPs and hashes on you, and you paste them into a browser one by one. It's slow, it's boring, and by the twentieth indicator your eyes glaze over.
-
-`ioc-triage` takes the whole list in one go. It figures out which line is an IP, a domain or a hash, then asks the right sources about each one through their official APIs. No scraping of web interfaces, just honest API calls with your own keys.
+`ioc-triage` checks a list of indicators of compromise against several reputation sources in a single run. The type of each indicator is detected automatically, and every request goes through the official APIs with your own keys, with no scraping of web interfaces.
 
 ## What it does
 
 - **Detects the type for you.** IP, domain, URL, MD5, SHA1, SHA256: no hints needed.
 - **Six sources.** All through official APIs, each in its own module behind a common interface.
 - **Internal addresses stay internal.** RFC1918, CGNAT, link-local and loopback are flagged as internal right away, without a single outbound request.
-- **Runs in parallel without upsetting the APIs.** Sources are queried at the same time, each with its own pacing (free VirusTotal gives you 4 requests a minute). If you hit a limit and get a 429, the tool tells you so.
+- **Parallel requests within rate limits.** Sources are queried at the same time, each with its own pacing (free VirusTotal gives you 4 requests a minute). An HTTP 429 shows up as a clear message in the results.
 - **Remembers what it already checked.** Results stay in a local cache for 24 hours, so re-running the same indicators doesn't burn your quota. Network errors never get cached.
 - **One flaky source won't take it down.** A missing key, a dropped connection or a rejected key is just a row in the results, not a traceback halfway through.
 - **Talks to humans and scripts.** A table in the terminal, `--output csv` or `--output json`.
-- **Zero dependencies.** Python standard library only, installs in seconds.
+- **Zero dependencies.** Python standard library only.
 
 ## Sources
 
@@ -117,7 +115,7 @@ The tool never fills in the blanks: a field only holds what the source actually 
 1. Sign up at https://www.virustotal.com/
 2. Grab your key at https://www.virustotal.com/gui/my-apikey and put it into `VT_API_KEY`.
 
-The free key gives you just 4 requests a minute, so the tool waits 15 seconds between requests and says so on stderr. A hundred indicators take about 25 minutes: a good moment for a coffee. With a premium key, raise the limit via `VT_RATE_LIMIT_PER_MIN`.
+The free key gives you just 4 requests a minute, so the tool waits 15 seconds between requests and says so on stderr. A hundred indicators take about 25 minutes. With a premium key, raise the limit via `VT_RATE_LIMIT_PER_MIN`.
 
 How the verdict works: 3 or more engines means "malicious", 1 or 2 means "suspicious". A single detection on a popular domain is almost always a false positive, which is why the threshold isn't one. Change it with `VT_MALICIOUS_THRESHOLD`.
 
@@ -153,7 +151,7 @@ A few things to know:
 <details>
 <summary><b>abuse.ch</b> (URLhaus, ThreatFox, MalwareBazaar)</summary>
 
-Since 2024 the abuse.ch APIs answer `401 Unauthorized` without a key. The good news: one key covers all three services.
+Since 2024 the abuse.ch APIs answer `401 Unauthorized` without a key. One key covers all three services.
 
 1. Sign in at https://auth.abuse.ch/ with GitHub, Google or LinkedIn.
 2. Click "Generate Key" in your profile and put the key into `ABUSECH_AUTH_KEY`.
@@ -164,7 +162,7 @@ Since 2024 the abuse.ch APIs answer `401 Unauthorized` without a key. The good n
 | URL | URLhaus `/v1/url/` |
 | IP / domain | ThreatFox `search_ioc`, and if nothing turns up, URLhaus `/v1/host/` |
 
-ThreatFox has a catch: it searches by substring, so `google.com` happily "matches" something like `proxy.google.com`. That's why only exact matches count. The one exception: `ip:port` entries do count for a bare IP.
+ThreatFox searches by substring, so `google.com` matches, for example, `proxy.google.com`. The tool only counts exact matches. The exception: `ip:port` entries count for a bare IP.
 
 </details>
 
@@ -186,7 +184,7 @@ ioc_triage/
     └── ratelimit.py  # per-source request pacing
 ```
 
-Every source is a module with a `check(indicator, indicator_type) -> Verdict` function. Want to add one? One file plus one line in `SOURCES_BY_TYPE` in `cli.py`, and you're done.
+Every source is a module with a `check(indicator, indicator_type) -> Verdict` function. A new source takes one file and one line in `SOURCES_BY_TYPE` in `cli.py`.
 
 ## Development
 
