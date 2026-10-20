@@ -37,13 +37,7 @@ def check_indicator(indicator: str) -> list[Verdict]:
     if indicator_type == "unknown":
         return [Verdict(indicator, "unknown", "-", verdict="не удалось определить тип")]
 
-    results = []
-    for check_fn in SOURCES_BY_TYPE.get(indicator_type, []):
-        try:
-            results.append(check_fn(indicator, indicator_type))
-        except NotImplementedError:
-            continue
-    return results
+    return [check_fn(indicator, indicator_type) for check_fn in SOURCES_BY_TYPE.get(indicator_type, [])]
 
 
 def main() -> None:
